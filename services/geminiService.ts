@@ -1,60 +1,48 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+// services/geminiService.ts
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { AnalysisResult } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// ✅ Correct Vite syntax to access your .env variable
+const API_KEY = import.meta.env.VITE_API_KEY; 
 
-export const analyzeResume = async (resume: string, jobDescription: string): Promise<AnalysisResult> => {
-  const model = 'gemini-3-pro-preview';
-  
-  const prompt = `
-    Analyze the following Resume against the Job Description. 
-    Provide a detailed match score (0-100), identify matching skills, missing critical skills, formatting feedback, ATS optimization tips, and specific suggested improvements.
-    
-    Resume:
-    ${resume}
-    
-    Job Description:
-    ${jobDescription}
-  `;
+const genAI = new GoogleGenerativeAI(API_KEY || '');
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          matchScore: { type: Type.NUMBER, description: "A score from 0 to 100 based on how well the resume matches the JD." },
-          matchingSkills: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Skills present in both resume and JD." },
-          missingSkills: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Keywords or skills from the JD missing in the resume." },
-          formattingFeedback: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Tips on resume structure, length, or readability." },
-          roleFit: { type: Type.STRING, description: "A brief summary of why the candidate is or isn't a good fit." },
-          suggestedImprovements: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                category: { type: Type.STRING },
-                action: { type: Type.STRING },
-                impact: { type: Type.STRING }
-              },
-              required: ["category", "action", "impact"]
-            }
-          },
-          atsOptimization: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Specific changes to make the resume more machine-readable." }
-        },
-        required: ["matchScore", "matchingSkills", "missingSkills", "formattingFeedback", "roleFit", "suggestedImprovements", "atsOptimization"]
-      }
-    }
+export const analyzeResume = async (resumeText: string, jobDescription: string): Promise<AnalysisResult> => {
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash", 
   });
 
+  const prompt = `
+    Analyze the following Resume against the Job Description provided.
+    
+    Return ONLY a JSON object with this exact structure:
+    {
+      "matchScore": number,
+      "matchingSkills": string[],
+      "missingSkills": string[],
+      "formattingFeedback": string[],
+      "roleFit": string,
+      "suggestedImprovements": [
+        { "category": string, "action": string, "impact": string }
+      ],
+      "atsOptimization": string[]
+    }
+
+    Resume: ${resumeText}
+    Job Description: ${jobDescription}
+  `;
+
   try {
-    const result = JSON.parse(response.text);
-    return result as AnalysisResult;
-  } catch (e) {
-    console.error("Failed to parse Gemini response", e);
-    throw new Error("Invalid response format from AI");
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    // Clean markdown formatting if present
+    const cleanJson = text.replace(/```json|```/g, "").trim();
+    
+    return JSON.parse(cleanJson) as AnalysisResult;
+  } catch (error) {
+    console.error("Analysis failed:", error);
+    throw new Error("Failed to analyze resume. Check your API key and connection.");
   }
 };
