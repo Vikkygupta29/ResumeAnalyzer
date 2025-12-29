@@ -1,4 +1,3 @@
-// services/geminiService.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { AnalysisResult } from "../types";
 
@@ -32,17 +31,19 @@ export const analyzeResume = async (resumeText: string, jobDescription: string):
     Job Description: ${jobDescription}
   `;
 
+  // --- THIS IS THE MISSING LOGIC THAT FIXES THE RED UNDERLINES ---
   try {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
     
-    // Clean markdown formatting if present
+    // Clean markdown formatting (like ```json) if the AI includes it
     const cleanJson = text.replace(/```json|```/g, "").trim();
     
+    // ✅ The 'return' satisfies the Promise<AnalysisResult> type requirement
     return JSON.parse(cleanJson) as AnalysisResult;
   } catch (error) {
     console.error("Analysis failed:", error);
-    throw new Error("Failed to analyze resume. Check your API key and connection.");
+    throw new Error("Failed to analyze resume. Please check your API key and connection.");
   }
 };
